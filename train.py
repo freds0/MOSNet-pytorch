@@ -225,7 +225,8 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
     plt.xlabel('MOS')
     plt.ylabel('number')
     plt.show()
-    plt.savefig('./output/MOSNet_distribution.png', dpi=150)
+    plt.savefig('./{}/MOSNet_distribution.png'.format(
+        train_config["output_directory"]), dpi=150)
 
     MSE = np.mean((MOS_true - MOS_Predict) ** 2)
     print('[UTTERANCE] Test error= %f' % MSE)
@@ -244,7 +245,8 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
     plt.ylabel('Predicted MOS')
     plt.title('LCC= {:.4f}, SRCC= {:.4f}, MSE= {:.4f}'.format(LCC[0][1], SRCC[0], MSE))
     plt.show()
-    plt.savefig('./output/MOSNet_scatter_plot.png', dpi=150)
+    plt.savefig('./{}/MOSNet_scatter_plot.png'.format(
+        train_config["output_directory"]), dpi=150)
 
 
 if __name__ == "__main__":
