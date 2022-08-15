@@ -49,7 +49,7 @@ def train(rank, output_directory, epochs, learning_rate,
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # compute loss
     criterion = None
@@ -175,6 +175,9 @@ def train(rank, output_directory, epochs, learning_rate,
 def test(train_config, loaddata_config, min_epoch, is_fp16):
     checkpoint_path = "{}/mosnet_{}".format(
         train_config["output_directory"], min_epoch)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     model = CNN_BLSTM().cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     model, optimizer, epoch_offset = load_checkpoint(checkpoint_path, model,
@@ -199,7 +202,10 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
     with torch.no_grad():
         for i, batch in enumerate(tqdm(test_loader)):
             model_input, [mos_y, frame_mos_y] = batch
-            model_input = torch.autograd.Variable(model_input.cuda())
+
+            model_input = torch.autograd.Variable(model_input.to(device, dtype=torch.float))
+            mos_y = mos_y.to(device, dtype=torch.float)
+            frame_mos_y = frame_mos_y.to(device, dtype=torch.float)
 
             avg_score, frame_score = model(model_input)
 
