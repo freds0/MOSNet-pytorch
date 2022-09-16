@@ -214,12 +214,12 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
             #df = df.append({'true_mos': MOS_true[i],
             #                'predict_mos': MOS_Predict[i]},
             #               ignore_index=True)
-            temp = pd.DataFrame(
+            tmp_df = pd.DataFrame(
                         [[MOS_true[i], MOS_Predict[i]]],
                         columns=['true_mos', 'predict_mos']
                    )
             df = pd.concat(
-                [df, temp],
+                [df, tmp_df],
                 ignore_index=True,
                 axis=0
             )

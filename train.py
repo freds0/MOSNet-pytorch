@@ -196,7 +196,8 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
                              )
     MOS_Predict = np.zeros([len(testset), ])
     MOS_true = np.zeros([len(testset), ])
-    df = pd.DataFrame(columns=['audio', 'true_mos', 'predict_mos'])
+    #df = pd.DataFrame(columns=['audio', 'true_mos', 'predict_mos'])
+    df = pd.DataFrame(columns=['true_mos', 'predict_mos'])
 
     model.eval()
     with torch.no_grad():
@@ -211,9 +212,18 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
 
             MOS_Predict[i] = avg_score.item()
             MOS_true[i] = mos_y.item()
-            df = df.append({'true_mos': MOS_true[i],
-                            'predict_mos': MOS_Predict[i]},
-                           ignore_index=True)
+            #df = df.append({'true_mos': MOS_true[i],
+            #                'predict_mos': MOS_Predict[i]},
+            #               ignore_index=True)
+            tmp_df = pd.DataFrame(
+                        [[MOS_true[i], MOS_Predict[i]]],
+                        columns=['true_mos', 'predict_mos']
+                   )
+            df = pd.concat(
+                [df, tmp_df],
+                ignore_index=True,
+                axis=0
+            )
 
     plt.style.use('seaborn-deep')
     x = df['true_mos']
@@ -224,7 +234,7 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
     plt.legend(loc='upper right')
     plt.xlabel('MOS')
     plt.ylabel('number')
-    plt.show()
+    #plt.show()
     plt.savefig('./{}/MOSNet_distribution.png'.format(
         train_config["output_directory"]), dpi=150)
 
@@ -244,7 +254,7 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
     plt.xlabel('True MOS')
     plt.ylabel('Predicted MOS')
     plt.title('LCC= {:.4f}, SRCC= {:.4f}, MSE= {:.4f}'.format(LCC[0][1], SRCC[0], MSE))
-    plt.show()
+    #plt.show()
     plt.savefig('./{}/MOSNet_scatter_plot.png'.format(
         train_config["output_directory"]), dpi=150)
 

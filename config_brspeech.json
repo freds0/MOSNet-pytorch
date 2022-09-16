@@ -15,8 +15,8 @@
         "num_train":13580,
         "num_test":4000,
         "num_valid":3000,
-        "bin_root": "/home/fred/Projetos/DATASETS/MOS/BRSPEECH_MOS_DATASET/",
-        "data_dir":"/home/fred/Projetos/DATASETS/MOS/BRSPEECH_MOS_DATASET/",
+        "bin_root": "/media/fred/DADOS/DATASET_MOS/BRSPEECH_MOS_DATASET/",
+        "data_dir":"/media/fred/DADOS/DATASET_MOS/BRSPEECH_MOS_DATASET/",
         "fft_size":512,
         "max_timestep":521
     }
