@@ -102,6 +102,10 @@ def train(rank, output_directory, epochs, learning_rate,
     min_loss = float("inf")
     for epoch in range(epoch_offset, epochs):
         print("Epoch: {}".format(epoch))
+
+        MOS_true = np.array([])
+        MOS_Predict = np.array([])
+
         for i, batch in enumerate(tqdm(train_loader)):
             model.train()
             model.zero_grad()
@@ -115,6 +119,9 @@ def train(rank, output_directory, epochs, learning_rate,
             fn_mse2 = nn.MSELoss()
             loss = fn_mse1(batch[1][0].to(device, dtype=torch.float), avg_score) + fn_mse2(batch[1][1].to(device, dtype=torch.float), frame_score)
             reduced_loss = loss.item()
+
+            MOS_Predict = np.concatenate([MOS_Predict, np.array(avg_score.squeeze().detach().cpu().numpy())])
+            MOS_true = np.concatenate([MOS_true, np.array(mos_y.detach().cpu().numpy()).reshape(-1)])
             '''
             if fp16_run:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -124,9 +131,15 @@ def train(rank, output_directory, epochs, learning_rate,
             '''
             loss.backward()
             optimizer.step()
-            print("epoch:{},loss:\t{:.9f}".format(epoch, reduced_loss))
+            print("Epoch:{} | Step:{} | Loss:{:.6f}".format(epoch, i, reduced_loss))
             if with_tensorboard and rank == 0:
                 logger.add_scalar('training_loss_batch', reduced_loss, i + len(train_loader) * epoch)
+
+        mse = np.mean((MOS_true - MOS_Predict) ** 2)
+        lcc = np.corrcoef(MOS_true, MOS_Predict)[0][1]
+        spearman_corr, _ = scipy.stats.spearmanr(MOS_Predict, MOS_true, axis=None)
+        pearson_corr, _ = scipy.stats.pearsonr(MOS_Predict, MOS_true)
+        print("Epoch:{} | MSE:{:.6f} | LCC:{:.4f} | Pearson:{:.4f} | Spearman:{:.4f}".format(epoch, mse, lcc, pearson_corr, spearman_corr))
 
         # validate
         if rank == 0:
@@ -152,8 +165,8 @@ def train(rank, output_directory, epochs, learning_rate,
                 loss = fn_mse1(batch[1][0].cuda(), avg_score) + fn_mse2(batch[1][1].to(device, dtype=torch.float), frame_score)
                 reduced_loss = loss.item()
 
-            print("validloss:\t{:.9f}".format(reduced_loss))
-            print("minloss:\t{:.9f}".format(reduced_loss))
+            print("Valid Loss:\t{:.9f}".format(reduced_loss))
+            print("Min Loss:\t{:.9f}".format(reduced_loss))
             if with_tensorboard and rank == 0:
                 logger.add_scalar('valid_loss_epoch', reduced_loss, epoch)
 
@@ -165,9 +178,9 @@ def train(rank, output_directory, epochs, learning_rate,
 
             else:
                 stop_step += 1
-                print("minloss:\t{:.9f},min_epoch:{}".format(min_loss, min_epoch))
+                print("Min Loss:{:.6f}, Min_Epoch:{}".format(min_loss, min_epoch))
                 if stop_step > earlystopping:
-                    print("earlystopping!")
+                    print("Early Stopping!")
                     return min_epoch
     return min_epoch
 
@@ -242,6 +255,8 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
     print('[UTTERANCE] Test error= %f' % MSE)
     LCC = np.corrcoef(MOS_true, MOS_Predict)
     print('[UTTERANCE] Linear correlation coefficient= %f' % LCC[0][1])
+    PEARSON = scipy.stats.pearsonr(MOS_true.T, MOS_Predict.T)
+    print('[UTTERANCE] Pearson rank correlation coefficient= %f' % PEARSON[0])
     SRCC = scipy.stats.spearmanr(MOS_true.T, MOS_Predict.T)
     print('[UTTERANCE] Spearman rank correlation coefficient= %f' % SRCC[0])
 

@@ -21,9 +21,9 @@ class getdataset(torch.utils.data.Dataset):
     def __init__(self, config, seed, mode):
 
         self.config = config
-        mos_list = read_list(os.path.join(config["data_dir"], 'mos_list.txt'))
+        #mos_list = read_list(os.path.join(config["data_dir"], 'mos_list.txt'))
         random.seed(seed)
-        random.shuffle(mos_list)
+        #random.shuffle(mos_list)
         self.max_wav_value = MAX_WAV_VALUE
         self.spec_fn = T.Spectrogram(
             n_fft=512,
@@ -36,11 +36,14 @@ class getdataset(torch.utils.data.Dataset):
 
         self.max_timestep = self.getmax_timestep(config, seed)
         if mode == "train":
-            self.filelist = mos_list[0:-(config["num_test"] + config["num_valid"])]
+            #self.filelist = mos_list[0:-(config["num_test"] + config["num_valid"])]
+            self.filelist = read_list(os.path.join(config["data_dir"], 'train.csv'))
         elif mode == "valid":
-            self.filelist = mos_list[-(config["num_test"] + config["num_valid"]):-config["num_test"]]
+            #self.filelist = mos_list[-(config["num_test"] + config["num_valid"]):-config["num_test"]]
+            self.filelist = read_list(os.path.join(config["data_dir"], 'val.csv'))
         elif mode == "test":
             self.filelist = mos_list[-config["num_test"]:]
+            self.filelist = read_list(os.path.join(config["data_dir"], 'test.csv'))
 
     def get_magnitude_spec(self, filename):
         audio, sampling_rate = load_wav_to_torch(filename)
@@ -68,7 +71,8 @@ class getdataset(torch.utils.data.Dataset):
         return result
 
     def getmax_timestep(self, config, seed):
-        file_list = read_list(os.path.join(config["data_dir"], 'mos_list.txt'))
+        #file_list = read_list(os.path.join(config["data_dir"], 'mos_list.txt'))
+        file_list = read_list(os.path.join(config["data_dir"], 'train.csv'))
         random.seed(seed)
         random.shuffle(file_list)
         filename = [file_list[x].split(',')[0] for x in range(len(file_list))]
