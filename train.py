@@ -48,7 +48,7 @@ def train(rank, output_directory, epochs, learning_rate,
           checkpoint_path, with_tensorboard, earlystopping):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-
+    max_epoch = 0
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # compute loss
@@ -100,6 +100,8 @@ def train(rank, output_directory, epochs, learning_rate,
     # TRAINING LOOP
     stop_step = 0
     min_loss = float("inf")
+    #max_corr = float("-inf")
+    print("Executing Training...")
     for epoch in range(epoch_offset, epochs):
         print("Epoch: {}".format(epoch))
 
@@ -131,28 +133,37 @@ def train(rank, output_directory, epochs, learning_rate,
             '''
             loss.backward()
             optimizer.step()
-            print("Epoch:{} | Step:{} | Loss:{:.6f}".format(epoch, i, reduced_loss))
+            if (i % 10 == 0):
+                print("Epoch:{} | Step:{} | Loss:{:.6f}".format(epoch, i, reduced_loss))
             if with_tensorboard and rank == 0:
-                logger.add_scalar('training_loss_batch', reduced_loss, i + len(train_loader) * epoch)
+                logger.add_scalar('train_loss_batch', reduced_loss, i + len(train_loader) * epoch)
 
         mse = np.mean((MOS_true - MOS_Predict) ** 2)
-        lcc = np.corrcoef(MOS_true, MOS_Predict)[0][1]
+        #lcc = np.corrcoef(MOS_true, MOS_Predict)[0][1]
         spearman_corr, _ = scipy.stats.spearmanr(MOS_Predict, MOS_true, axis=None)
         pearson_corr, _ = scipy.stats.pearsonr(MOS_Predict, MOS_true)
-        print("Epoch:{} | MSE:{:.6f} | LCC:{:.4f} | Pearson:{:.4f} | Spearman:{:.4f}".format(epoch, mse, lcc, pearson_corr, spearman_corr))
+        print("Epoch:{} | MSE:{:.4f} | Pearson:{:.4f} | Spearman:{:.4f}".format(epoch, mse, pearson_corr, spearman_corr))
 
         # validate
         if rank == 0:
-            checkpoint_path = "{}/mosnet_{}".format(
+            checkpoint_path = "{}/mosnet_{}.pt".format(
                 output_directory, epoch)
             save_checkpoint(model, optimizer, learning_rate, epoch,
                             checkpoint_path)
             if with_tensorboard:
-                logger.add_scalar('training_loss_epoch', reduced_loss, epoch)
+                logger.add_scalar('train_loss_epoch', reduced_loss, epoch)
+                logger.add_scalar('train_mse_epoch', mse, epoch)
+                logger.add_scalar('train_spearman_epoch', spearman_corr, epoch)
+                logger.add_scalar('train_lcc_epoch', pearson_corr, epoch)
 
         # earlystopping
+        print("Executing Validation...")
         model.eval()
         with torch.no_grad():
+
+            MOS_true_val = np.array([])
+            MOS_Predict_val = np.array([])
+
             for i, batch in enumerate(valid_loader):
                 model_input, [mos_y, frame_mos_y] = batch
                 model_input = torch.autograd.Variable(model_input.to(device, dtype=torch.float))
@@ -165,29 +176,59 @@ def train(rank, output_directory, epochs, learning_rate,
                 loss = fn_mse1(batch[1][0].cuda(), avg_score) + fn_mse2(batch[1][1].to(device, dtype=torch.float), frame_score)
                 reduced_loss = loss.item()
 
-            print("Valid Loss:\t{:.9f}".format(reduced_loss))
-            print("Min Loss:\t{:.9f}".format(reduced_loss))
-            if with_tensorboard and rank == 0:
-                logger.add_scalar('valid_loss_epoch', reduced_loss, epoch)
+                MOS_Predict_val = np.concatenate([MOS_Predict_val, np.array(avg_score.squeeze().detach().cpu().numpy())])
+                MOS_true_val = np.concatenate([MOS_true_val, np.array(mos_y.detach().cpu().numpy()).reshape(-1)])
 
-            if min_loss > reduced_loss:
+            if reduced_loss < min_loss:
+                print("Improved results: reduced loss better than minimal loss.")
                 min_loss = reduced_loss
                 min_epoch = epoch
-            if (min_loss - reduced_loss) > -0.01:
                 stop_step = 0
-
+                checkpoint_path = "{}/best.pt".format(output_directory)
+                print("Saving best model...")
+                save_checkpoint(model, optimizer, learning_rate, epoch,
+                                checkpoint_path)
             else:
                 stop_step += 1
                 print("Min Loss:{:.6f}, Min_Epoch:{}".format(min_loss, min_epoch))
                 if stop_step > earlystopping:
                     print("Early Stopping!")
                     return min_epoch
-    return min_epoch
+
+            '''
+            if min_loss > reduced_loss:
+                min_loss = reduced_loss
+                min_epoch = epoch
+
+            if (min_loss - reduced_loss) > -0.01:
+                stop_step = 0
+            else:
+                stop_step += 1
+                print("Min Loss:{:.6f}, Min_Epoch:{}".format(min_loss, min_epoch))
+                if stop_step > earlystopping:
+                    print("Early Stopping!")
+                    return min_epoch
+            '''
+            mse = np.mean((MOS_true_val - MOS_Predict_val) ** 2)
+            #lcc = np.corrcoef(MOS_true_val, MOS_Predict_val)[0][1]
+            spearman_corr, _ = scipy.stats.spearmanr(MOS_Predict_val, MOS_true_val, axis=None)
+            pearson_corr, _ = scipy.stats.pearsonr(MOS_Predict_val, MOS_true_val)
+            print("Epoch:{} | MSE:{:.4f} | Pearson:{:.4f} | Spearman:{:.4f}".format(epoch, mse, pearson_corr, spearman_corr))
+            print("Valid Loss:\t{:.4f}".format(reduced_loss))
+            print("Min Loss:\t{:.4f}".format(min_loss))
+            if with_tensorboard and rank == 0:
+                logger.add_scalar('valid_loss_epoch', reduced_loss, epoch)
+                logger.add_scalar('valid_mse_epoch', mse, epoch)
+                logger.add_scalar('valid_spearman_epoch', spearman_corr, epoch)
+                logger.add_scalar('valid_lcc_epoch', pearson_corr, epoch)
+
+    return max_epoch
+    #return min_epoch
 
 
-def test(train_config, loaddata_config, min_epoch, is_fp16):
-    checkpoint_path = "{}/mosnet_{}".format(
-        train_config["output_directory"], min_epoch)
+def test(train_config, loaddata_config, max_epoch, is_fp16):
+    checkpoint_path = "{}/mosnet_{}.pt".format(
+        train_config["output_directory"], max_epoch)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -200,7 +241,7 @@ def test(train_config, loaddata_config, min_epoch, is_fp16):
         from apex import amp
         model, _ = amp.initialize(model, [], opt_level="O3")
     '''
-    print('testing...')
+    print('Executing Testing...')
     model.eval()
     testset = getdataset(loaddata_config, train_config["seed"], "test")
     test_loader = DataLoader(testset, num_workers=0,
